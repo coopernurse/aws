@@ -9,24 +9,40 @@ import (
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math"
+	"math/rand"
+	"os"
 	"net/http"
 	"net/url"
-	"os"
 	"sort"
 	"strings"
 	"time"
 )
 
-const (
-	EC2Host    = "ec2.amazonaws.com"
-	EC2Version = "2011-11-01"
-)
+func NewClient() *Client {
+	return &Client{
+		Key:     os.Getenv("AWS_ACCESS_KEY_ID"),
+		Secret:  os.Getenv("AWS_SECRET_ACCESS_KEY"),	
+   	    MaxRetries: 0,
+	}
+}
 
-var TemplateRequest = Request{
-	Host:    EC2Host,
-	Version: EC2Version,
-	Key:     os.Getenv("AWS_ACCESS_KEY_ID"),
-	Secret:  os.Getenv("AWS_SECRET_ACCESS_KEY"),
+type Client struct {
+	Key     string
+	Secret  string
+
+	// If greater than zero, requests that fail will be retried 
+	// up to this number of times
+	MaxRetries int
+}
+
+func (c *Client) NewRequest(host, version string) *Request {
+	return &Request{
+		Host: host,
+		Version: version,
+		Client: *c,
+		Params: Params{},
+	}
 }
 
 type Param struct {
@@ -68,34 +84,39 @@ func (p *Params) Encode() (s string) {
 
 type Request struct {
 	Host    string
-	Key     string
-	Secret  string
 	Version string
+
+	Client
 	Params
+	
+	encoded bool
 }
 
 func (r *Request) Encode() string {
-	r.Add("AWSAccessKeyId", r.Key)
-	r.Add("SignatureMethod", "HmacSHA256")
-	r.Add("SignatureVersion", "2")
-	r.Add("Version", r.Version)
-	r.Add("Timestamp", time.Now().UTC().Format(time.RFC3339))
+	if !r.encoded {
+		r.Add("AWSAccessKeyId", r.Key)
+		r.Add("SignatureMethod", "HmacSHA256")
+		r.Add("SignatureVersion", "2")
+		r.Add("Version", r.Version)
+		r.Add("Timestamp", time.Now().UTC().Format(time.RFC3339))
+		
+		sort.Sort(r)
 
-	sort.Sort(r)
+		data := strings.Join([]string{
+			"POST",
+			r.Host,
+			"/",
+			r.Params.Encode(),
+		}, "\n")
+		
+		h := hmac.New(sha256.New, []byte(r.Secret))
+		h.Write([]byte(data))
 
-	data := strings.Join([]string{
-		"POST",
-		r.Host,
-		"/",
-		r.Params.Encode(),
-	}, "\n")
+		sig := base64.StdEncoding.EncodeToString(h.Sum([]byte{}))
 
-	h := hmac.New(sha256.New, []byte(r.Secret))
-	h.Write([]byte(data))
-
-	sig := base64.StdEncoding.EncodeToString(h.Sum([]byte{}))
-
-	r.Add("Signature", sig)
+		r.Add("Signature", sig)
+		r.encoded = true
+	}
 
 	return r.Params.Encode()
 }
@@ -126,19 +147,37 @@ func (err *Error) Error() string {
 }
 
 func Do(r *Request, v interface{}) error {
-	// charset=utf-8 is required by the SDB endpoint
-	// otherwise it fails signature checking.
-	// ec2 endpoint seems to be fine with it either way
-	res, err := http.Post(
-		"https://"+r.Host,
+	var err error
+	var res *http.Response
+	for i := 0; i <= r.MaxRetries; i++ {
+		if i > 0 {
+			// sleep on retry
+			jitter := rand.Int63n(200)
+			ms := int64(math.Min(2000, 100*math.Pow(2, float64(i))))
+			time.Sleep(time.Duration((ms + jitter) * int64(time.Millisecond)))
+		}
+
+		// charset=utf-8 is required by the SDB endpoint
+		// otherwise it fails signature checking.
+		// ec2 endpoint seems to be fine with it either way
+		start := time.Now()
+		res, err = http.Post("https://"+r.Host, 
 		"application/x-www-form-urlencoded; charset=utf-8",
-		bytes.NewBufferString(r.Encode()),
-	)
-	if err != nil {
-		return err
+			bytes.NewBufferString(r.Encode()))
+		elap := time.Now().Sub(start)
+		fmt.Println(elap.Nanoseconds() / 1e6)
+
+		if err == nil && res.StatusCode == http.StatusOK {
+			// return immediately on success
+			return unmarshal(res, v)
+		}
+
 	}
 
-	return unmarshal(res, v)
+	if err == nil {
+		return unmarshal(res, v)
+	}
+	return err
 }
 
 func unmarshal(res *http.Response, v interface{}) error {
@@ -176,28 +215,3 @@ func (lr *logReader) Read(b []byte) (n int, err error) {
 	return
 }
 
-// Sugar
-type DescribeInstancesResponse struct {
-	Header
-	Reservations []Reservation `xml:"reservationSet>item"`
-}
-
-type Reservation struct {
-	ReservationId string
-	Instances     []Instance `xml:"instancesSet>item"`
-}
-
-type Instance struct {
-	InstanceId string
-	StateName  string `xml:"instanceState>name"`
-	DnsName    string
-	IpAddress  string
-}
-
-func DescribeInstances() (*DescribeInstancesResponse, error) {
-	r := TemplateRequest
-	r.Add("Action", "DescribeInstances")
-
-	v := new(DescribeInstancesResponse)
-	return v, Do(&r, v)
-}

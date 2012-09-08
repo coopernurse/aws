@@ -25,7 +25,7 @@ func TestUnmarshalError(t *testing.T) {
 					<Message>AWS was not able to validate the provided access credentials</Message>
 				</Error>
 			</Errors>
-			<RequestID>afc00dc9-0c19-46db-a987-f7de2a12a361</RequestID>
+			<RequestId>afc00dc9-0c19-46db-a987-f7de2a12a361</RequestId>
 		</Response>
 	`)
 
