@@ -12,18 +12,26 @@ import (
 	"math"
 	"math/rand"
 	"net/http"
-	"net/url"
 	"os"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 )
+
+func toInt(s string, defVal int) int {
+	i, err := strconv.Atoi(s)
+	if err != nil {
+		return defVal
+	}
+	return i
+}
 
 func NewClient() *Client {
 	return &Client{
 		Key:        os.Getenv("AWS_ACCESS_KEY_ID"),
 		Secret:     os.Getenv("AWS_SECRET_ACCESS_KEY"),
-		MaxRetries: 0,
+		MaxRetries: toInt(os.Getenv("AWS_MAX_RETRIES"), 5),
 	}
 }
 
@@ -51,7 +59,7 @@ type Param struct {
 }
 
 func (p *Param) Encode() string {
-	return p.Key + "=" + url.QueryEscape(p.Val)
+	return p.Key + "=" + escape(p.Val)
 }
 
 type Params []*Param
@@ -154,21 +162,22 @@ func Do(r *Request, v interface{}) error {
 			// sleep on retry
 			jitter := rand.Int63n(200)
 			ms := int64(math.Min(2000, 100*math.Pow(2, float64(i))))
+			//fmt.Println("Retry: ", i, (ms+jitter))
 			time.Sleep(time.Duration((ms + jitter) * int64(time.Millisecond)))
 		}
 
 		// charset=utf-8 is required by the SDB endpoint
 		// otherwise it fails signature checking.
 		// ec2 endpoint seems to be fine with it either way
-		start := time.Now()
+		//start := time.Now()
 		res, err = http.Post("https://"+r.Host,
 			"application/x-www-form-urlencoded; charset=utf-8",
 			bytes.NewBufferString(r.Encode()))
-		elap := time.Now().Sub(start)
-		fmt.Println(elap.Nanoseconds() / 1e6)
+		//elap := time.Now().Sub(start)
+		//fmt.Println(elap.Nanoseconds() / 1e6)
 
-		if err == nil && res.StatusCode == http.StatusOK {
-			// return immediately on success
+		if err == nil && res.StatusCode < 500 {
+			// return immediately if no network error occurs and no 5xx HTTP status returned
 			return unmarshal(res, v)
 		}
 
@@ -213,4 +222,55 @@ func (lr *logReader) Read(b []byte) (n int, err error) {
 	n, err = lr.r.Read(b)
 	fmt.Print(string(b))
 	return
+}
+
+////////////////////////////////
+// url escaping -- taken from:
+// https://github.com/robert-wallis/go-awssign/blob/master/aws.go
+
+// modified from net.url because shouldEscape is
+// overriden with an encodeQueryComponent 'if'
+// http://golang.org/src/pkg/net/url/url.go?s=4017:4682#L175
+func escape(s string) string {
+	spaceCount, hexCount := 0, 0
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if shouldEscape(c) {
+			hexCount++
+		}
+	}
+
+	if spaceCount == 0 && hexCount == 0 {
+		return s
+	}
+
+	t := make([]byte, len(s)+2*hexCount)
+	j := 0
+	for i := 0; i < len(s); i++ {
+		switch c := s[i]; {
+		case shouldEscape(c):
+			t[j] = '%'
+			t[j+1] = "0123456789ABCDEF"[c>>4]
+			t[j+2] = "0123456789ABCDEF"[c&15]
+			j += 3
+		default:
+			t[j] = s[i]
+			j++
+		}
+	}
+	return string(t)
+}
+
+// truncated from pkg net/url
+// according to RFC 3986
+func shouldEscape(c byte) bool {
+	switch {
+	// §2.3 Unreserved characters (alphanum)
+	case 'A' <= c && c <= 'Z' || 'a' <= c && c <= 'z' || '0' <= c && c <= '9':
+		return false
+	// §2.3 Unreserved characters (mark)
+	case '-' == c, '_' == c, '.' == c, '~' == c:
+		return false
+	}
+	return true
 }

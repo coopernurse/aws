@@ -37,20 +37,17 @@ type SDBDomainMetaResponse struct {
 }
 
 type SDBItem struct {
-	Name    string
-	Attribs []SDBItemAttribute
-}
-
-type SDBItemAttribute struct {
-	Name    string
-	Value   string
-	Replace bool
+	Name    string         `xml:"Name"`
+	Attribs []SDBAttribute `xml:"Attribute"`
 }
 
 type SDBAttribute struct {
-	Name           string
-	Value          string
-	Replace        bool
+	Name    string `xml:"Name"`
+	Value   string `xml:"Value"`
+	Replace bool
+
+	// These are only used by single item get/put calls
+	// Batch get/put calls do not support these properties
 	ExpectedName   string
 	ExpectedValue  string
 	ExpectedExists bool
@@ -61,9 +58,58 @@ type AttributeValue struct {
 	Value string `xml:"Value"`
 }
 
+type SDBSelectResponse struct {
+	SDBResponse
+	Items []SDBItem `xml:"SelectResult>Item"`
+}
+
 type SDBGetAttributeResponse struct {
 	SDBResponse
 	Attribs []AttributeValue `xml:"GetAttributesResult>Attribute"`
+}
+
+func (c *Client) SDBSelect(query, nextToken string, consistent bool) (*SDBSelectResponse, error) {
+	r := c.SDBRequest()
+	r.Add("Action", "Select")
+	r.Add("SelectExpression", query)
+	if consistent {
+		r.Add("ConsistentRead", "true")
+	}
+	if nextToken != "" {
+		r.Add("NextToken", nextToken)
+	}
+
+	resp := new(SDBSelectResponse)
+	return resp, Do(r, resp)
+}
+
+func SDBSelect(query, nextToken string, consistent bool) (*SDBSelectResponse, error) {
+	c := NewClient()
+	return c.SDBSelect(query, nextToken, consistent)
+}
+
+func (c *Client) SDBBatchDeleteAttributes(domain string, items []SDBItem) (*SDBResponse, error) {
+	r := c.SDBRequest()
+	r.Add("Action", "BatchDeleteAttributes")
+	r.Add("DomainName", domain)
+
+	for y, item := range items {
+		r.Add(fmt.Sprintf("Item.%d.ItemName", y), item.Name)
+		for x, a := range item.Attribs {
+			r.Add(fmt.Sprintf("Item.%d.Attribute.%d.Name", y, x), a.Name)
+			if a.Value != "" {
+				r.Add(fmt.Sprintf("Item.%d.Attribute.%d.Value", y, x), a.Value)
+			}
+		}
+	}
+
+	resp := new(SDBResponse)
+	return resp, Do(r, resp)
+}
+
+func SDBBatchDeleteAttributes(domain string, items []SDBItem) (*SDBResponse, error) {
+	c := NewClient()
+	return c.SDBBatchDeleteAttributes(domain, items)
 }
 
 func (c *Client) SDBBatchPutAttributes(domain string, items []SDBItem) (*SDBResponse, error) {
