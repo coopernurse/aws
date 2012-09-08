@@ -15,55 +15,55 @@ func (c *Client) SDBRequest() *Request {
 }
 
 type SDBResponse struct {
-	RequestId    string      `xml:"ResponseMetadata>RequestId"`
-	BoxUsage     float64     `xml:"ResponseMetadata>BoxUsage"`
+	RequestId string  `xml:"ResponseMetadata>RequestId"`
+	BoxUsage  float64 `xml:"ResponseMetadata>BoxUsage"`
 }
 
 type SDBListDomainsResponse struct {
 	SDBResponse
-	Domains          []string   `xml:"ListDomainsResult>DomainName"`
-	NextToken        string     `xml:"ListDomainsResult>NextToken"`
+	Domains   []string `xml:"ListDomainsResult>DomainName"`
+	NextToken string   `xml:"ListDomainsResult>NextToken"`
 }
 
 type SDBDomainMetaResponse struct {
 	SDBResponse
-	Timestamp                int64   `xml:"DomainMetadataResult>Timestamp"`
-    ItemCount                int     `xml:"DomainMetadataResult>ItemCount"`
-    AttrValueCount      int     `xml:"DomainMetadataResult>AttributeValueCount"`
-	AttrNameCount       int     `xml:"DomainMetadataResult>AttributeNameCount"`
-	ItemNameSizeBytes        int64   `xml:"DomainMetadataResult>ItemNameSizeBytes"`
-	AttrValuesSizeBytes int64   `xml:"DomainMetadataResult>AttributeValuesSizeBytes"`
-	AttrNamesSizeBytes  int64   `xml:"DomainMetadataResult>AttributeNamesSizeBytes"`
+	Timestamp           int64 `xml:"DomainMetadataResult>Timestamp"`
+	ItemCount           int   `xml:"DomainMetadataResult>ItemCount"`
+	AttrValueCount      int   `xml:"DomainMetadataResult>AttributeValueCount"`
+	AttrNameCount       int   `xml:"DomainMetadataResult>AttributeNameCount"`
+	ItemNameSizeBytes   int64 `xml:"DomainMetadataResult>ItemNameSizeBytes"`
+	AttrValuesSizeBytes int64 `xml:"DomainMetadataResult>AttributeValuesSizeBytes"`
+	AttrNamesSizeBytes  int64 `xml:"DomainMetadataResult>AttributeNamesSizeBytes"`
 }
 
 type SDBItem struct {
-	Name       string
-	Attribs    []SDBItemAttribute
+	Name    string
+	Attribs []SDBItemAttribute
 }
 
 type SDBItemAttribute struct {
-	Name            string
-	Value           string
-	Replace         bool
+	Name    string
+	Value   string
+	Replace bool
 }
 
 type SDBAttribute struct {
-	Name            string
-	Value           string
-	Replace         bool
-	ExpectedName    string
-    ExpectedValue   string
-	ExpectedExists  bool
+	Name           string
+	Value          string
+	Replace        bool
+	ExpectedName   string
+	ExpectedValue  string
+	ExpectedExists bool
 }
 
 type AttributeValue struct {
-    Name     string   `xml:"Name"`
-    Value    string   `xml:"Value"`
+	Name  string `xml:"Name"`
+	Value string `xml:"Value"`
 }
 
 type SDBGetAttributeResponse struct {
 	SDBResponse
-	Attribs       []AttributeValue `xml:"GetAttributesResult>Attribute"`
+	Attribs []AttributeValue `xml:"GetAttributesResult>Attribute"`
 }
 
 func (c *Client) SDBBatchPutAttributes(domain string, items []SDBItem) (*SDBResponse, error) {
@@ -134,7 +134,7 @@ func (c *Client) SDBGetAttributes(domain, item string, attribs []string, consist
 	if consistent {
 		r.Add("ConsistentRead", "true")
 	}
-	
+
 	resp := new(SDBGetAttributeResponse)
 	return resp, Do(r, resp)
 }

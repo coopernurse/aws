@@ -74,16 +74,16 @@ func TestSDBDomains(t *testing.T) {
 	createDomain(t)
 	domainMeta(t)
 
-	items := map[string][]SDBAttribute{ 
+	items := map[string][]SDBAttribute{
 		"seattle": []SDBAttribute{
-			SDBAttribute{Name:"temp", Value: "58"},
-			SDBAttribute{Name:"baseball", Value: "Mariners"},
-			SDBAttribute{Name:"football", Value: "Seahawks"},
+			SDBAttribute{Name: "temp", Value: "58"},
+			SDBAttribute{Name: "baseball", Value: "Mariners"},
+			SDBAttribute{Name: "football", Value: "Seahawks"},
 		},
 		"sf": []SDBAttribute{
-			SDBAttribute{Name:"temp", Value: "65"},
-			SDBAttribute{Name:"baseball", Value: "Giants"},
-			SDBAttribute{Name:"football", Value: "49ers"},
+			SDBAttribute{Name: "temp", Value: "65"},
+			SDBAttribute{Name: "baseball", Value: "Giants"},
+			SDBAttribute{Name: "football", Value: "49ers"},
 		},
 	}
 
@@ -113,4 +113,3 @@ func TestSDBDomains(t *testing.T) {
 		}
 	}
 }
-

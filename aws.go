@@ -11,9 +11,9 @@ import (
 	"io/ioutil"
 	"math"
 	"math/rand"
-	"os"
 	"net/http"
 	"net/url"
+	"os"
 	"sort"
 	"strings"
 	"time"
@@ -21,15 +21,15 @@ import (
 
 func NewClient() *Client {
 	return &Client{
-		Key:     os.Getenv("AWS_ACCESS_KEY_ID"),
-		Secret:  os.Getenv("AWS_SECRET_ACCESS_KEY"),	
-   	    MaxRetries: 0,
+		Key:        os.Getenv("AWS_ACCESS_KEY_ID"),
+		Secret:     os.Getenv("AWS_SECRET_ACCESS_KEY"),
+		MaxRetries: 0,
 	}
 }
 
 type Client struct {
-	Key     string
-	Secret  string
+	Key    string
+	Secret string
 
 	// If greater than zero, requests that fail will be retried 
 	// up to this number of times
@@ -38,10 +38,10 @@ type Client struct {
 
 func (c *Client) NewRequest(host, version string) *Request {
 	return &Request{
-		Host: host,
+		Host:    host,
 		Version: version,
-		Client: *c,
-		Params: Params{},
+		Client:  *c,
+		Params:  Params{},
 	}
 }
 
@@ -88,7 +88,7 @@ type Request struct {
 
 	Client
 	Params
-	
+
 	encoded bool
 }
 
@@ -99,7 +99,7 @@ func (r *Request) Encode() string {
 		r.Add("SignatureVersion", "2")
 		r.Add("Version", r.Version)
 		r.Add("Timestamp", time.Now().UTC().Format(time.RFC3339))
-		
+
 		sort.Sort(r)
 
 		data := strings.Join([]string{
@@ -108,7 +108,7 @@ func (r *Request) Encode() string {
 			"/",
 			r.Params.Encode(),
 		}, "\n")
-		
+
 		h := hmac.New(sha256.New, []byte(r.Secret))
 		h.Write([]byte(data))
 
@@ -161,8 +161,8 @@ func Do(r *Request, v interface{}) error {
 		// otherwise it fails signature checking.
 		// ec2 endpoint seems to be fine with it either way
 		start := time.Now()
-		res, err = http.Post("https://"+r.Host, 
-		"application/x-www-form-urlencoded; charset=utf-8",
+		res, err = http.Post("https://"+r.Host,
+			"application/x-www-form-urlencoded; charset=utf-8",
 			bytes.NewBufferString(r.Encode()))
 		elap := time.Now().Sub(start)
 		fmt.Println(elap.Nanoseconds() / 1e6)
@@ -214,4 +214,3 @@ func (lr *logReader) Read(b []byte) (n int, err error) {
 	fmt.Print(string(b))
 	return
 }
-
